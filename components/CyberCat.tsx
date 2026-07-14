@@ -10,7 +10,7 @@
  *   交互层：拖拽、抚摸、喂小鱼干、聊天输入、随机挂机语录
  *
  * 悬浮球模式功能：
- *   - 可拖拽到任意位置
+ *   - 可拖拽到任意位置（dragConstraints 通过 viewportRef 约束）
  *   - 空闲30秒自动收起到屏幕边缘（仅露出一小部分）
  *   - 收起后呼吸动画 + 挂机语录（每25秒80%概率）
  *   - 点击/拖拽露出部分 → 展开完整UI
@@ -21,10 +21,10 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 /* ===== 常量 ===== */
-const COLLAPSE_OFFSET = 96;   // 80% of 120px cat width — 收起位移量
 const COLLAPSE_DELAY = 30000; // 30秒无操作自动收起
 const COLLAPSED_QUOTE_IVL = 25000;
 const NORMAL_QUOTE_IVL = 20000;
+const CAT_WIDTH = 120; // 猫猫 sprite 尺寸
 
 const COLLAPSED_BARKS = [
   "想你了喵~ 快来看看本喵！",
@@ -68,6 +68,7 @@ export default function CyberCat() {
   const sessionIdRef = useRef<string>(`sess_${Math.random().toString(36).slice(2)}`);
   const collapseTimerRef = useRef<NodeJS.Timeout | null>(null);
   const catRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
 
   // --- 同步 refs，防止闭包过期 ---
   const collapsedRef = useRef(collapsed);
@@ -212,16 +213,39 @@ export default function CyberCat() {
     }
   }, [collapsed]);
 
-  // --- 收起位移 ---
-  const collapseX = collapsed ? (edge === 'right' ? COLLAPSE_OFFSET : -COLLAPSE_OFFSET) : 0;
+  // --- 收起位移：90% 隐藏到边缘，只露 ~50px ---
+  const collapseX = collapsed
+    ? (edge === 'right' ? CAT_WIDTH * 0.9 : -CAT_WIDTH * 0.9)
+    : 0;
+
+  // --- 气泡方向：收起时 bubble 朝屏幕内侧 ---
+  // 收起+右边缘：猫被推到右边，可见部分在左 → bubble 在左侧，尾巴朝右指猫
+  // 收起+左边缘：猫被推到左边，可见部分在右 → bubble 在右侧，尾巴朝左指猫
+  const bubbleJustify = collapsed
+    ? (edge === 'right' ? 'justify-start' : 'justify-end')
+    : 'justify-center';
+  const bubbleTailPos = collapsed
+    ? (edge === 'right'
+        ? 'left-[calc(100%-9px)]'   // bubble 左侧对齐，尾巴在右边（朝猫）
+        : 'left-[9px]')              // bubble 右侧对齐，尾巴在左边（朝猫）
+    : 'left-1/2';                     // 居中
+  const bubbleTailXlate = collapsed ? '-translate-x-0' : '-translate-x-1/2';
 
   return (
+    // 外壳层：动画位移 & 不透明度
     <motion.div
       className="fixed bottom-20 right-20 z-[9999]"
       animate={{ x: collapseX, opacity: collapsed ? 0.85 : 1 }}
       transition={{ type: 'spring', stiffness: 300, damping: 25 }}
       onClick={() => { if (collapsed) resetCollapseTimer(); }}
     >
+      {/* ✅ Bug Fix：全屏不可见 div 提供 dragConstraints */}
+      <div
+        ref={viewportRef}
+        className="fixed inset-0 pointer-events-none"
+        aria-hidden="true"
+      />
+
       {/* 呼吸动画层 */}
       <motion.div
         animate={collapsed ? { scale: [0.85, 0.9, 0.85] } : { scale: 1 }}
@@ -232,13 +256,14 @@ export default function CyberCat() {
           ref={catRef}
           drag
           dragElastic={0.1}
+          dragConstraints={viewportRef}
           whileDrag={{ scale: 1.1, cursor: "grabbing" }}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           className="flex flex-col items-center group cursor-grab active:cursor-grabbing"
         >
-          {/* 聊天气泡 */}
-          <div className="relative w-full flex justify-center mb-6">
+          {/* 💬 聊天气泡 */}
+          <div className={`relative w-full flex ${bubbleJustify} mb-6`}>
             <AnimatePresence>
               {speech && (
                 <motion.div
@@ -249,20 +274,23 @@ export default function CyberCat() {
                   style={{ pointerEvents: 'none', transformOrigin: 'bottom center' }}
                 >
                   {speech}
-                  <div className="absolute -bottom-[6px] left-1/2 -translate-x-1/2 w-3 h-3 bg-white dark:bg-slate-800 border-b border-r border-gray-100 dark:border-slate-700 transform rotate-45" />
+                  {/* 气泡尾巴：收起时方向朝猫（屏幕内侧） */}
+                  <div
+                    className={`absolute -bottom-[6px] ${bubbleTailPos} ${bubbleTailXlate} w-3 h-3 bg-white dark:bg-slate-800 border-b border-r border-gray-100 dark:border-slate-700 transform rotate-45`}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
 
-          {/* 猫咪本体 & 交互按钮 */}
+          {/* 🐈 猫咪本体 & 交互按钮 */}
           <div className="relative">
 
             {/* 左侧按钮区：收起时隐藏 */}
             {!collapsed && (
               <div className="absolute -left-12 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-20">
 
-                {/* 聊天按钮 */}
+                {/* 💬 聊天按钮 */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -277,7 +305,7 @@ export default function CyberCat() {
                   </svg>
                 </button>
 
-                {/* 喂小鱼干按钮 */}
+                {/* 🐟 喂小鱼干按钮 */}
                 <button
                   onClick={handleFeed}
                   disabled={isThinking}
@@ -341,7 +369,7 @@ export default function CyberCat() {
             </div>
           </div>
 
-          {/* 聊天输入框：收起时隐藏 */}
+          {/* ⌨️ 聊天输入框：收起时隐藏 */}
           {!collapsed && (
             <AnimatePresence>
               {showInput && (
