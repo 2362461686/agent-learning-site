@@ -18,7 +18,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
 
 /* ===== 常量 ===== */
 const COLLAPSE_DELAY = 30000; // 30秒无操作自动收起
@@ -69,6 +69,19 @@ export default function CyberCat() {
   const collapseTimerRef = useRef<NodeJS.Timeout | null>(null);
   const catRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const posX = useMotionValue(0);
+  const posY = useMotionValue(0);
+  const expandedPosRef = useRef({ x: 0, y: 0 });
+  const [dragKey, setDragKey] = useState(0);
+
+  // --- 首次挂载：初始化位置（SSR-safe） ---
+  useEffect(() => {
+    const x = window.innerWidth - CAT_WIDTH - 80;
+    const y = window.innerHeight - CAT_WIDTH - 80;
+    expandedPosRef.current = { x, y };
+    posX.set(x);
+    posY.set(y);
+  }, []);
 
   // --- 同步 refs，防止闭包过期 ---
   const collapsedRef = useRef(collapsed);
@@ -117,6 +130,23 @@ export default function CyberCat() {
     };
   }, [resetCollapseTimer]);
 
+  // --- 窗口 resize：猫猫不跑出屏幕 ---
+  useEffect(() => {
+    const handleResize = () => {
+      const { x, y } = expandedPosRef.current;
+      if (x > window.innerWidth - 30) {
+        expandedPosRef.current.x = window.innerWidth - CAT_WIDTH;
+        if (!collapsedRef.current) posX.set(window.innerWidth - CAT_WIDTH);
+      }
+      if (y > window.innerHeight - CAT_WIDTH) {
+        expandedPosRef.current.y = window.innerHeight - CAT_WIDTH;
+        if (!collapsedRef.current) posY.set(window.innerHeight - CAT_WIDTH);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // --- 交互：摸猫猫 ---
   const handlePetCat = () => {
     if (isPetted) return;
@@ -141,9 +171,13 @@ export default function CyberCat() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: "我刚刚喂了你一条美味的小鱼干！你有什么表示？", sessionId: sessionIdRef.current }),
       });
-      if (!res.ok) throw new Error('API Error');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        speak(err.error || err.details || "铲屎官的网线被老鼠咬断了吧？喵！", 4000);
+        return;
+      }
       const data = await res.json();
-      speak(data.reply || "吧唧吧唧... 谢谢喵~", 8000);
+      speak(data.reply || "...", 8000);
     } catch {
       speak("吧唧吧唧... 鱼干好吃，但本喵卡壳了喵...", 4000);
     } finally {
@@ -168,9 +202,13 @@ export default function CyberCat() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: userMessage, sessionId: sessionIdRef.current }),
       });
-      if (!res.ok) throw new Error('API Error');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        speak(err.error || err.details || "铲屎官的网线被老鼠咬断了吧？喵！", 4000);
+        return;
+      }
       const data = await res.json();
-      speak(data.reply || "喵... 本喵短路了喵...", 8000);
+      speak(data.reply || "...", 8000);
     } catch {
       speak("铲屎官的网线被老鼠咬断了吧？喵！", 4000);
     } finally {
@@ -185,8 +223,16 @@ export default function CyberCat() {
   };
 
   const handleDragEnd = (_event: any, info: any) => {
-    const mouseX = info.point.x;
-    setEdge(mouseX > window.innerWidth / 2 ? 'right' : 'left');
+    const rect = catRef.current?.getBoundingClientRect();
+    if (rect) {
+      const x = Math.max(-CAT_WIDTH + 30, Math.min(window.innerWidth - 30, rect.left));
+      const y = Math.max(0, Math.min(window.innerHeight - CAT_WIDTH, rect.top));
+      expandedPosRef.current = { x, y };
+      posX.set(x);
+      posY.set(y);
+    }
+    setEdge(info.point.x > window.innerWidth / 2 ? 'right' : 'left');
+    setDragKey(prev => prev + 1);
     resetCollapseTimer();
   };
 
@@ -213,10 +259,18 @@ export default function CyberCat() {
     }
   }, [collapsed]);
 
-  // --- 收起位移：90% 隐藏到边缘，只露 ~50px ---
-  const collapseX = collapsed
-    ? (edge === 'right' ? CAT_WIDTH * 0.9 : -CAT_WIDTH * 0.9)
-    : 0;
+  // --- 收起/展开：useEffect 驱动 posX 来保留拖动位置 ---
+  useEffect(() => {
+    if (!collapsed) {
+      posX.set(expandedPosRef.current.x);
+      return;
+    }
+    if (edge === 'right') {
+      posX.set(window.innerWidth - 24);
+    } else {
+      posX.set(-(CAT_WIDTH - 24));
+    }
+  }, [collapsed, edge]);
 
   // --- 气泡方向：收起时 bubble 朝屏幕内侧 ---
   // 收起+右边缘：猫被推到右边，可见部分在左 → bubble 在左侧，尾巴朝右指猫
@@ -234,8 +288,13 @@ export default function CyberCat() {
   return (
     // 外壳层：动画位移 & 不透明度
     <motion.div
-      className="fixed bottom-20 right-20 z-[9999]"
-      animate={{ x: collapseX, opacity: collapsed ? 0.85 : 1 }}
+      style={{
+        position: 'fixed',
+        left: 0, top: 0,
+        x: posX, y: posY,
+        zIndex: 9999,
+      }}
+      animate={{ opacity: collapsed ? 0.85 : 1 }}
       transition={{ type: 'spring', stiffness: 300, damping: 25 }}
       onClick={() => { if (collapsed) resetCollapseTimer(); }}
     >
@@ -253,6 +312,7 @@ export default function CyberCat() {
       >
         {/* 拖拽层 */}
         <motion.div
+          key={dragKey}
           ref={catRef}
           drag
           dragElastic={0.1}
@@ -319,10 +379,22 @@ export default function CyberCat() {
 
             {/* 猫咪精灵图容器 */}
             <div
-              className="w-[120px] h-[120px] relative cursor-pointer"
+              className="relative cursor-pointer overflow-hidden transition-all duration-500 rounded-2xl"
+              style={{
+                width: collapsed ? 24 : CAT_WIDTH,
+                height: CAT_WIDTH,
+              }}
               onClick={handlePetCat}
             >
-              <style>{`
+              <div
+                className="absolute top-0 h-full"
+                style={{
+                  width: CAT_WIDTH,
+                  ...(collapsed && edge === 'right' ? { right: 0 } : {}),
+                  ...(collapsed && edge === 'left' ? { left: 0 } : {}),
+                }}
+              >
+                <style>{`
                 .cat-sprite {
                   width: 100%;
                   height: 100%;
@@ -365,7 +437,8 @@ export default function CyberCat() {
                   83.33%, 100% { background-position-x: 71.4%; }
                 }
               `}</style>
-              <div className={`cat-sprite drop-shadow-2xl ${isPetted ? 'cat-petted' : isThinking ? 'cat-thinking' : 'cat-idle'}`} />
+                <div className={`cat-sprite drop-shadow-2xl ${isPetted ? 'cat-petted' : isThinking ? 'cat-thinking' : 'cat-idle'}`} />
+              </div>
             </div>
           </div>
 

@@ -196,6 +196,7 @@ export async function POST(req: Request) {
 
     const apiKey = process.env.DEEPSEEK_API_KEY;
     if (!apiKey) {
+      console.error('[CatAPI] DEEPSEEK_API_KEY not set');
       return new Response(JSON.stringify({ error: 'API key missing' }), { status: 500 });
     }
 
@@ -250,7 +251,9 @@ export async function POST(req: Request) {
     });
 
     if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
+      const errText = await response.text();
+      console.error('[CatAPI] DeepSeek error:', response.status, errText.slice(0, 200));
+      const err = (() => { try { return JSON.parse(errText); } catch { return {}; } })();
       return new Response(
         JSON.stringify({
           error: `DeepSeek API 返回 ${response.status}`,
@@ -271,6 +274,7 @@ export async function POST(req: Request) {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error: any) {
+    console.error('[CatAPI] Unexpected error:', error.message);
     return new Response(JSON.stringify({ error: error.message }), { status: 500 });
   }
 }
