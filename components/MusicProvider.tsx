@@ -176,7 +176,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         setCurrentLyric(currentSong.lyrics[0]?.text || "\u266a \u7eaf\u4eab\u97f3\u4e50 \u266a");
       }
     } else if (currentSong.lrcUrl) {
-      fetch(currentSong.lrcUrl)
+      fetch(`/api/music/lrc?id=${currentSong.id}`)
         .then(res => res.text())
         .then(text => {
           if (isMounted) {
@@ -199,7 +199,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       }
     }
     return () => { isMounted = false; };
-  }, [currentIndex, playlist.length]);
+  }, [currentIndex, playlist]);
 
   useEffect(() => {
     if (audioRef.current) {
