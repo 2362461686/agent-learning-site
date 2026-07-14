@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useRef, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useRef, useEffect, ReactNode, useCallback } from 'react';
 import { siteConfig } from '../siteConfig';
 
 // 【增强版 LRC 歌词解析】
@@ -33,13 +33,12 @@ function parseLrc(lrcText: string) {
   return result.sort((a, b) => a.time - b.time);
 }
 
-// 🌟 1. 扩充 Context 类型，加入 MusicPage 需要的所有属性
 type PlayMode = 'loop' | 'single' | 'random';
 
 interface MusicContextType {
   playlist: any[];
   currentIndex: number;
-  currentSong: any; // 扩展了 lyrics 属性
+  currentSong: any;
   isPlaying: boolean;
   progress: number;
   currentTime: number;
@@ -58,9 +57,28 @@ interface MusicContextType {
   setVolume: (value: number) => void;
   toggleMute: () => void;
   togglePlayMode: () => void;
+  addSong: (songId: string) => Promise<{ error?: string }>;
+  removeSong: (songId: string) => void;
 }
 
 const MusicContext = createContext<MusicContextType | null>(null);
+
+const PLAYLIST_CACHE_KEY = 'music_playlist_cache';
+const CUSTOM_IDS_KEY = 'music_custom_ids';
+
+// 从 localStorage 读取用户添加的歌单 ID
+function getCustomIds(): string[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_IDS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomIds(ids: string[]) {
+  localStorage.setItem(CUSTOM_IDS_KEY, JSON.stringify(ids));
+}
 
 export function MusicProvider({ children }: { children: ReactNode }) {
   const [playlist, setPlaylist] = useState<any[]>([]);
@@ -73,46 +91,77 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const [currentLyric, setCurrentLyric] = useState("正在连接高可用神经云端...");
   const [isLoading, setIsLoading] = useState(true);
 
-  // 🌟 2. 新增音量和播放模式状态
   const [volume, setVolumeState] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [playMode, setPlayMode] = useState<PlayMode>('loop');
 
   const audioRef = useRef<HTMLAudioElement>(null);
+  const isMountedRef = useRef(true);
 
+  // 合并默认 + 自定义歌单 ID
+  const getAllIds = useCallback((): string[] => {
+    const defaults = siteConfig.cloudMusicIds || [];
+    const customs = getCustomIds();
+    // 去重，自定义在前（优先保留用户选择）
+    const merged = [...new Set([...defaults, ...customs])];
+    return merged;
+  }, []);
+
+  // 拉取歌曲数据
+  const fetchMusicData = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return [];
+    const res = await fetch(`/api/music?ids=${ids.join(',')}`);
+    const rawResults = await res.json();
+    return rawResults
+      .filter((song: any) => song && song.url && !song.error)
+      .map((song: any) => ({
+        id: song.id || Math.random().toString(),
+        title: song.name || '未知歌曲',
+        artist: song.artist || song.author || '未知歌手',
+        cover: song.cover || song.pic || 'https://bu.dusays.com/2026/03/24/69c24230a5ff8.jpg',
+        src: song.url,
+        lrcUrl: null,
+        lyrics: song.lrc ? parseLrc(song.lrc) : []
+      }));
+  }, []);
+
+  // 初始化：localStorage 秒开 + 后台刷新
   useEffect(() => {
-    let isMounted = true;
-    const fetchMusicData = async () => {
-      try {
-        const res = await fetch(`/api/music?ids=${siteConfig.cloudMusicIds.join(',')}`);
-        const rawResults = await res.json();
+    isMountedRef.current = true;
+    const loadPlaylist = async () => {
+      // Step 1: 先从 localStorage 读缓存，立即显示（秒开）
+      const cached = localStorage.getItem(PLAYLIST_CACHE_KEY);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            if (isMountedRef.current) {
+              setPlaylist(parsed);
+              setIsLoading(false);
+            }
+          }
+        } catch { /* ignore cache parse error */ }
+      }
 
-        const mergedPlaylist = rawResults
-          .filter((song: any) => song && song.url && !song.error)
-          .map((song: any) => ({
-            id: song.id || Math.random().toString(),
-            title: song.name || '未知歌曲',
-            artist: song.artist || song.author || '未知歌手',
-            cover: song.cover || song.pic || 'https://bu.dusays.com/2026/03/24/69c24230a5ff8.jpg',
-            src: song.url,
-            lrcUrl: null,
-            lyrics: song.lrc ? parseLrc(song.lrc) : []
-          }));
-
-        if (isMounted) {
-          if (mergedPlaylist.length > 0) setPlaylist(mergedPlaylist);
-          else setCurrentLyric("云端链路受阻");
+      // Step 2: 后台请求 API 刷新数据
+      const ids = getAllIds();
+      if (ids.length > 0) {
+        const data = await fetchMusicData(ids);
+        if (isMountedRef.current && data.length > 0) {
+          setPlaylist(data);
+          localStorage.setItem(PLAYLIST_CACHE_KEY, JSON.stringify(data));
+        }
+        if (isMountedRef.current) {
           setIsLoading(false);
         }
-      } catch (error) {
-        if (isMounted) { setCurrentLyric("网络初始化失败"); setIsLoading(false); }
+      } else {
+        setIsLoading(false);
       }
     };
 
-    if (siteConfig.cloudMusicIds?.length > 0) fetchMusicData();
-    else setIsLoading(false);
+    loadPlaylist();
 
-    return () => { isMounted = false; };
+    return () => { isMountedRef.current = false; };
   }, []);
 
   useEffect(() => {
@@ -150,9 +199,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
       }
     }
     return () => { isMounted = false; };
-  }, [currentIndex, playlist.length]); // 移除 playlist 依赖防止无限循环，只依赖长度
+  }, [currentIndex, playlist.length]);
 
-  // 🌟 4. 同步音量到 audio 元素
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = isMuted ? 0 : volume;
@@ -167,7 +215,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 🌟 5. 重写 nextSong，加入对随机模式的处理
   const nextSong = () => {
     if (playMode === 'random') {
       setCurrentIndex(Math.floor(Math.random() * playlist.length));
@@ -184,10 +231,9 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 🌟 6. 暴露直接播放指定歌曲的方法
   const playSong = (index: number) => {
     setCurrentIndex(index);
-    if (!isPlaying) setIsPlaying(true); // 保证切歌后自动播放
+    if (!isPlaying) setIsPlaying(true);
   };
 
   const handleTimeUpdate = () => {
@@ -206,7 +252,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // 🌟 7. 处理歌曲结束
   const handleEnded = () => {
     if (playMode === 'single' && audioRef.current) {
        audioRef.current.currentTime = 0;
@@ -239,22 +284,82 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  // ===== 新增：网站内添加/删除歌曲 =====
+
+  const addSong = async (songId: string): Promise<{ error?: string }> => {
+    // 去重检查
+    const customs = getCustomIds();
+    const existing = [...siteConfig.cloudMusicIds, ...customs];
+    if (existing.includes(songId)) {
+      return { error: '这首歌已经在歌单里了' };
+    }
+
+    // 验证歌曲是否存在
+    try {
+      const res = await fetch(`/api/music/add?id=${songId}`);
+      const data = await res.json();
+      if (data.error || !data.url) {
+        return { error: data.error || '无法获取歌曲信息' };
+      }
+
+      // 保存到 localStorage
+      const newIds = [...customs, songId];
+      saveCustomIds(newIds);
+
+      // 刷新歌单
+      const allIds = [...siteConfig.cloudMusicIds, ...newIds];
+      const newPlaylist = await fetchMusicData(allIds);
+      if (newPlaylist.length > 0) {
+        setPlaylist(newPlaylist);
+        localStorage.setItem(PLAYLIST_CACHE_KEY, JSON.stringify(newPlaylist));
+      }
+
+      return {};
+    } catch {
+      return { error: '网络错误，请重试' };
+    }
+  };
+
+  const removeSong = (songId: string) => {
+    const customs = getCustomIds();
+    // 只能移除用户自己添加的歌曲，不能移除默认歌曲
+    if (!customs.includes(songId)) return;
+
+    const newIds = customs.filter(id => id !== songId);
+    saveCustomIds(newIds);
+
+    // 刷新歌单
+    const allIds = [...siteConfig.cloudMusicIds, ...newIds];
+    fetchMusicData(allIds).then(newPlaylist => {
+      if (newPlaylist.length > 0) {
+        setPlaylist(newPlaylist);
+        localStorage.setItem(PLAYLIST_CACHE_KEY, JSON.stringify(newPlaylist));
+        // 如果当前歌曲被删了，切到第一首
+        if (currentIndex >= newPlaylist.length) {
+          setCurrentIndex(0);
+        }
+      }
+    });
+  };
+
   const currentSong = playlist[currentIndex];
 
   return (
     <MusicContext.Provider value={{
         playlist, currentIndex, currentSong, isPlaying, progress, currentTime, duration, currentLyric, isLoading,
-        volume, isMuted, playMode, // 暴露新状态
+        volume, isMuted, playMode,
         togglePlay, nextSong, prevSong, handleSeek,
-        playSong, setVolume, toggleMute, togglePlayMode // 暴露新方法
+        playSong, setVolume, toggleMute, togglePlayMode,
+        addSong, removeSong
     }}>
       {children}
       {currentSong && (
         <audio
           ref={audioRef}
           src={currentSong.src}
+          preload="metadata"
           onTimeUpdate={handleTimeUpdate}
-          onEnded={handleEnded} // 使用我们重写的结束处理
+          onEnded={handleEnded}
           onLoadedMetadata={handleTimeUpdate}
         />
       )}

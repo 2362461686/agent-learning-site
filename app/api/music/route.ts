@@ -22,10 +22,21 @@ type SongResult = {
   error?: string
 }
 
+// 服务端内存缓存：避免每次请求都调外部 API
+const cache = new Map<string, { data: SongResult[]; ts: number }>();
+const CACHE_TTL = 30 * 60 * 1000; // 30 分钟
+
 export async function GET(request: NextRequest) {
   const ids = request.nextUrl.searchParams.get('ids')
   if (!ids) {
     return NextResponse.json({ error: 'Missing ids parameter' }, { status: 400 })
+  }
+
+  // 检查缓存
+  const cacheKey = ids;
+  const cached = cache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    return NextResponse.json(cached.data);
   }
 
   const songIds = ids.split(',').map((id) => id.trim()).filter(Boolean)
@@ -66,6 +77,9 @@ export async function GET(request: NextRequest) {
       }
     }),
   )
+
+  // 写入缓存
+  cache.set(cacheKey, { data: results, ts: Date.now() });
 
   return NextResponse.json(results)
 }

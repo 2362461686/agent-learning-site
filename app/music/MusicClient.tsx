@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, RefreshCcw, ListMusic, Mic2, Disc3, Volume2, VolumeX, Search, X, MessageSquare } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, RefreshCcw, ListMusic, Mic2, Disc3, Volume2, VolumeX, Search, X, MessageSquare, Plus, Trash2 } from 'lucide-react';
 import Navbar from '../../components/Navbar';
 import PageTransition from '../../components/PageTransition';
 import { useMusic } from '../../components/MusicProvider';
@@ -12,9 +12,10 @@ export default function MusicClient() {
   const {
     playlist, currentSong, isPlaying, progress, currentTime, duration, currentLyric,
     isLoading, togglePlay, nextSong, prevSong, handleSeek,
-    playSong, selectSong,
+    playSong,
     playMode, togglePlayMode,
-    volume, setVolume, isMuted, toggleMute
+    volume, setVolume, isMuted, toggleMute,
+    addSong, removeSong
   } = useMusic();
 
   const lyricContainerRef = useRef<HTMLDivElement>(null);
@@ -22,6 +23,11 @@ export default function MusicClient() {
   const [activeTab, setActiveTab] = useState<'lyrics' | 'playlist'>('lyrics');
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAddPanel, setShowAddPanel] = useState(false);
+  const [addSongInput, setAddSongInput] = useState('');
+  const [addSongMsg, setAddSongMsg] = useState('');
+  const [addSongOk, setAddSongOk] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
 
   const [parsedLyrics, setParsedLyrics] = useState<any[]>([]);
 
@@ -102,9 +108,41 @@ export default function MusicClient() {
   };
 
   const handlePlaySong = (index: number) => {
-    if (typeof playSong === 'function') playSong(index);
-    else if (typeof selectSong === 'function') selectSong(index);
+    playSong(index);
   };
+
+  const handleAddSong = async () => {
+    const id = addSongInput.trim();
+    if (!id) return;
+    setIsAdding(true);
+    setAddSongMsg('');
+    setAddSongOk(false);
+    try {
+      const result = await addSong(id);
+      if (result.error) {
+        setAddSongMsg(result.error);
+        setAddSongOk(false);
+      } else {
+        setAddSongInput('');
+        setAddSongMsg('添加成功！');
+        setAddSongOk(true);
+        setTimeout(() => { setAddSongMsg(''); setAddSongOk(false); setShowAddPanel(false); }, 1500);
+      }
+    } catch {
+      setAddSongMsg('网络错误，请重试');
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  // 判断歌曲是否为用户自定义的（显示删除按钮）
+  const getCustomSongIds = (): string[] => {
+    try {
+      const raw = localStorage.getItem('music_custom_ids');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  };
+  const customIds = getCustomSongIds();
 
   const filteredPlaylist = useMemo(() => {
     if (!searchQuery.trim()) return playlist;
@@ -241,20 +279,94 @@ export default function MusicClient() {
                       <input type="text" placeholder="搜索音轨..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full h-10 md:h-12 pl-10 md:pl-12 pr-10 md:pr-12 bg-white/30 dark:bg-slate-900/60 backdrop-blur-md border border-white/50 dark:border-white/10 rounded-full text-xs md:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/40 shadow-inner transition-all" />
                       {searchQuery && (<button onClick={() => setSearchQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 hover:bg-black/10 rounded-full transition-colors"><X size={14} className="text-slate-500" /></button>)}
                     </div>
+
+                    {/* ====== 管理歌单 ====== */}
+                    <div className="w-full max-w-md mx-auto shrink-0 mb-3">
+                      <button
+                        onClick={() => setShowAddPanel(!showAddPanel)}
+                        className={`w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-bold transition-all border ${
+                          showAddPanel
+                            ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-600'
+                            : 'bg-white/20 border-white/30 text-slate-500 hover:text-indigo-500 hover:border-indigo-500/30'
+                        }`}
+                      >
+                        <Plus size={14} />
+                        {showAddPanel ? '收起' : '添加歌曲'}
+                      </button>
+                      <AnimatePresence>
+                        {showAddPanel && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="pt-3 pb-1 flex flex-col gap-2">
+                              <p className="text-[10px] text-slate-400 text-center">
+                                在网易云音乐网页版打开一首歌，复制 URL 末尾的数字 ID
+                              </p>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={addSongInput}
+                                  onChange={e => setAddSongInput(e.target.value)}
+                                  onKeyDown={e => e.key === 'Enter' && handleAddSong()}
+                                  placeholder="粘贴歌曲 ID..."
+                                  className="flex-1 h-9 px-3 bg-white/30 dark:bg-slate-900/60 border border-white/50 dark:border-white/10 rounded-full text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                                  disabled={isAdding}
+                                />
+                                <button
+                                  onClick={handleAddSong}
+                                  disabled={isAdding || !addSongInput.trim()}
+                                  className={`px-4 h-9 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                    isAdding || !addSongInput.trim()
+                                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                      : 'bg-indigo-500 text-white hover:bg-indigo-600 shadow-md'
+                                  }`}
+                                >
+                                  {isAdding ? (
+                                    <span className="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                  ) : (
+                                    <Plus size={12} />
+                                  )}
+                                  添加
+                                </button>
+                              </div>
+                              {addSongMsg && (
+                                <p className={`text-[10px] text-center font-bold ${addSongOk ? 'text-green-500' : 'text-red-400'}`}>
+                                  {addSongMsg}
+                                </p>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
                     <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 flex flex-col gap-2 md:gap-2.5">
                       <AnimatePresence mode='popLayout'>
                         {filteredPlaylist.map((song: any) => {
                           const originalIndex = playlist.findIndex((s: any) => s.id === song.id);
                           const isPlayingThis = (song.id === currentSong.id);
+                          const isCustom = customIds.includes(String(song.id));
                           return (
-                            <motion.div layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} key={song.id} onClick={() => handlePlaySong(originalIndex)} className={`group flex items-center justify-between p-3 md:p-4 rounded-xl md:rounded-2xl cursor-pointer transition-all border ${isPlayingThis ? 'bg-white/60 dark:bg-slate-700/80 shadow-md border-indigo-500/30' : 'border-transparent hover:bg-white/30 dark:hover:bg-slate-700/40'}`}>
-                              <div className="flex items-center gap-3 md:gap-4 w-[85%]">
+                            <motion.div layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} key={song.id} className={`group flex items-center justify-between p-3 md:p-4 rounded-xl md:rounded-2xl cursor-pointer transition-all border relative ${isPlayingThis ? 'bg-white/60 dark:bg-slate-700/80 shadow-md border-indigo-500/30' : 'border-transparent hover:bg-white/30 dark:hover:bg-slate-700/40'}`}>
+                              <div className="flex items-center gap-3 md:gap-4 flex-1 min-w-0" onClick={() => handlePlaySong(originalIndex)}>
                                 <div className="relative w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-lg md:rounded-xl overflow-hidden shadow-sm">
                                   <img src={song.cover || song.pic} alt="cover" className="w-full h-full object-cover" />
                                   {isPlayingThis && isPlaying && <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-[1px]"><div className="flex gap-[3px] items-end h-2 md:h-3"><span className="w-0.5 bg-white rounded-full animate-[bounce_1s_infinite_0ms]" /><span className="w-0.5 bg-white rounded-full animate-[bounce_1s_infinite_200ms]" /><span className="w-0.5 bg-white rounded-full animate-[bounce_1s_infinite_400ms]" /></div></div>}
                                 </div>
                                 <div className="flex flex-col truncate"><span className={`text-sm md:text-[15px] font-black truncate ${isPlayingThis ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-800 dark:text-slate-200'}`}>{song.title || song.name}</span><span className="text-[10px] md:text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate mt-0.5">{song.artist || song.author}</span></div>
                               </div>
+                              {isCustom && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); removeSong(String(song.id)); }}
+                                  className="ml-2 p-1.5 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-all shrink-0"
+                                  title="从歌单中移除"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
                             </motion.div>
                           );
                         })}
