@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
           cover: song.cover || '',
           pic: song.cover || '',
           url: song.url || '',
-          lrc: '', // Meting API 返回的 lrc 是歌词 URL，由 MusicProvider 自己 fetch
+          lrc: song.lrc || '',
         }
       } catch (error) {
         console.error(`[api/music] Meting API 获取歌曲 ${songId} 失败:`, error)

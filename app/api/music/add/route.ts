@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       artist: song.artist || '未知歌手',
       cover: song.cover || '',
       url: song.url || '',
-      lrc: '',
+      lrc: song.lrc || '',
     })
   } catch (error) {
     console.error('[api/music/add] Error:', error)
