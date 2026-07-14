@@ -120,8 +120,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         artist: song.artist || song.author || '未知歌手',
         cover: song.cover || song.pic || 'https://bu.dusays.com/2026/03/24/69c24230a5ff8.jpg',
         src: song.url,
-        lrcUrl: null,
-        lyrics: song.lrc ? parseLrc(song.lrc) : []
+        lrcUrl: song.lrc || null,
+        lyrics: []
       }));
   }, []);
 
