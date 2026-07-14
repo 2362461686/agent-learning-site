@@ -17,8 +17,8 @@
  *   - 移动端和桌面端都适用
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence, useMotionValue } from 'framer-motion';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 /* ===== 常量 ===== */
 const COLLAPSE_DELAY = 30000; // 30秒无操作自动收起
@@ -67,32 +67,23 @@ export default function CyberCat() {
   const chatTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const sessionIdRef = useRef<string>(`sess_${Math.random().toString(36).slice(2)}`);
   const collapseTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const catRef = useRef<HTMLDivElement>(null);
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const posX = useMotionValue(0);
-  const posY = useMotionValue(0);
-  const expandedPosRef = useRef({ x: 0, y: 0 });
-  const [dragKey, setDragKey] = useState(0);
+  const constrainRef = useRef<HTMLDivElement>(null);
 
-  // --- 首次挂载：初始化位置（SSR-safe） ---
-  useEffect(() => {
-    const x = window.innerWidth - CAT_WIDTH - 80;
-    const y = window.innerHeight - CAT_WIDTH - 80;
-    expandedPosRef.current = { x, y };
-    posX.set(x);
-    posY.set(y);
-  }, []);
+  // --- 位置记忆 ---
+  const [savedPos, setSavedPos] = useState({ x: 0, y: 0 });
 
   // --- 同步 refs，防止闭包过期 ---
   const collapsedRef = useRef(collapsed);
   const speechRef = useRef(speech);
   const showInputRef = useRef(showInput);
   const isThinkingRef = useRef(isThinking);
+  const savedPosRef = useRef(savedPos);
 
   useEffect(() => { collapsedRef.current = collapsed; }, [collapsed]);
   useEffect(() => { speechRef.current = speech; }, [speech]);
   useEffect(() => { showInputRef.current = showInput; }, [showInput]);
   useEffect(() => { isThinkingRef.current = isThinking; }, [isThinking]);
+  useEffect(() => { savedPosRef.current = savedPos; }, [savedPos]);
 
   // --- 说话功能 ---
   const speak = (text: string, duration = 6000) => {
@@ -112,12 +103,8 @@ export default function CyberCat() {
         return;
       }
       // 判断靠近哪个屏幕边缘
-      const catEl = catRef.current;
-      if (catEl) {
-        const rect = catEl.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        setEdge(centerX > window.innerWidth / 2 ? 'right' : 'left');
-      }
+      const centerX = savedPosRef.current.x + CAT_WIDTH / 2;
+      setEdge(centerX > window.innerWidth / 2 ? 'right' : 'left');
       setCollapsed(true);
     }, COLLAPSE_DELAY);
   }, []);
@@ -130,18 +117,17 @@ export default function CyberCat() {
     };
   }, [resetCollapseTimer]);
 
-  // --- 窗口 resize：猫猫不跑出屏幕 ---
+  // --- 初始化位置 + resize 处理 ---
   useEffect(() => {
+    setSavedPos({
+      x: window.innerWidth - CAT_WIDTH - 80,
+      y: window.innerHeight - CAT_WIDTH - 80,
+    });
     const handleResize = () => {
-      const { x, y } = expandedPosRef.current;
-      if (x > window.innerWidth - 30) {
-        expandedPosRef.current.x = window.innerWidth - CAT_WIDTH;
-        if (!collapsedRef.current) posX.set(window.innerWidth - CAT_WIDTH);
-      }
-      if (y > window.innerHeight - CAT_WIDTH) {
-        expandedPosRef.current.y = window.innerHeight - CAT_WIDTH;
-        if (!collapsedRef.current) posY.set(window.innerHeight - CAT_WIDTH);
-      }
+      setSavedPos(prev => ({
+        x: Math.max(-CAT_WIDTH + 30, Math.min(window.innerWidth - 30, prev.x)),
+        y: Math.max(0, Math.min(window.innerHeight - CAT_WIDTH, prev.y)),
+      }));
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -217,22 +203,16 @@ export default function CyberCat() {
   };
 
   // --- 拖拽 ---
-  const handleDragStart = () => {
-    if (collapsedRef.current) setCollapsed(false);
+  const handleDragStart = useCallback(() => {
+    if (collapsed) setCollapsed(false);
     resetCollapseTimer();
-  };
+  }, [collapsed, resetCollapseTimer]);
 
-  const handleDragEnd = (_event: any, info: any) => {
-    const rect = catRef.current?.getBoundingClientRect();
-    if (rect) {
-      const x = Math.max(-CAT_WIDTH + 30, Math.min(window.innerWidth - 30, rect.left));
-      const y = Math.max(0, Math.min(window.innerHeight - CAT_WIDTH, rect.top));
-      expandedPosRef.current = { x, y };
-      posX.set(x);
-      posY.set(y);
-    }
+  const handleDragEnd = (_: any, info: any) => {
+    const clampedX = Math.max(-CAT_WIDTH + 30, Math.min(window.innerWidth - 30, info.point.x - CAT_WIDTH / 2));
+    const clampedY = Math.max(0, Math.min(window.innerHeight - CAT_WIDTH, info.point.y - CAT_WIDTH / 2));
+    setSavedPos({ x: clampedX, y: clampedY });
     setEdge(info.point.x > window.innerWidth / 2 ? 'right' : 'left');
-    setDragKey(prev => prev + 1);
     resetCollapseTimer();
   };
 
@@ -259,18 +239,14 @@ export default function CyberCat() {
     }
   }, [collapsed]);
 
-  // --- 收起/展开：useEffect 驱动 posX 来保留拖动位置 ---
-  useEffect(() => {
-    if (!collapsed) {
-      posX.set(expandedPosRef.current.x);
-      return;
-    }
-    if (edge === 'right') {
-      posX.set(window.innerWidth - 24);
-    } else {
-      posX.set(-(CAT_WIDTH - 24));
-    }
-  }, [collapsed, edge]);
+  // --- 收起/展开目标位置：useMemo 计算 animate 目标 ---
+  const targetPos = useMemo(() => {
+    if (!collapsed) return savedPos;
+    return {
+      x: edge === 'right' ? window.innerWidth - 24 : -(CAT_WIDTH - 24),
+      y: savedPos.y,
+    };
+  }, [collapsed, edge, savedPos]);
 
   // --- 气泡方向：收起时 bubble 朝屏幕内侧 ---
   // 收起+右边缘：猫被推到右边，可见部分在左 → bubble 在左侧，尾巴朝右指猫
@@ -286,42 +262,35 @@ export default function CyberCat() {
   const bubbleTailXlate = collapsed ? '-translate-x-0' : '-translate-x-1/2';
 
   return (
-    // 外壳层：动画位移 & 不透明度
+    // 外壳层：单层 drag + animate 定位
     <motion.div
-      style={{
-        position: 'fixed',
-        left: 0, top: 0,
-        x: posX, y: posY,
-        zIndex: 9999,
+      drag
+      dragElastic={0}
+      dragMomentum={false}
+      dragConstraints={constrainRef}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      whileDrag={{ cursor: "grabbing" }}
+      style={{ position: 'fixed', left: 0, top: 0, zIndex: 9999 }}
+      animate={{
+        x: targetPos.x,
+        y: targetPos.y,
+        opacity: collapsed ? 0.85 : 1,
       }}
-      animate={{ opacity: collapsed ? 0.85 : 1 }}
       transition={{ type: 'spring', stiffness: 300, damping: 25 }}
       onClick={() => { if (collapsed) resetCollapseTimer(); }}
+      className="cursor-grab active:cursor-grabbing group"
     >
-      {/* ✅ Bug Fix：全屏不可见 div 提供 dragConstraints */}
       <div
-        ref={viewportRef}
+        ref={constrainRef}
         className="fixed inset-0 pointer-events-none"
         aria-hidden="true"
       />
 
-      {/* 呼吸动画层 */}
-      <motion.div
-        animate={collapsed ? { scale: [0.85, 0.9, 0.85] } : { scale: 1 }}
-        transition={collapsed ? { repeat: Infinity, duration: 2, ease: 'easeInOut' } : { duration: 0.3 }}
-      >
-        {/* 拖拽层 */}
-        <motion.div
-          key={dragKey}
-          ref={catRef}
-          drag
-          dragElastic={0.1}
-          dragConstraints={viewportRef}
-          whileDrag={{ scale: 1.1, cursor: "grabbing" }}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          className="flex flex-col items-center group cursor-grab active:cursor-grabbing"
-        >
+      {/* 呼吸动画：CSS animation 替代 motion scale */}
+      <div className={collapsed ? 'animate-breathe' : ''}>
+        {/* 内容层 */}
+        <div className="flex flex-col items-center">
           {/* 💬 聊天气泡 */}
           <div className={`relative w-full flex ${bubbleJustify} mb-6`}>
             <AnimatePresence>
@@ -436,6 +405,13 @@ export default function CyberCat() {
                   66.67%, 83.33% { background-position-x: 57.1%; }
                   83.33%, 100% { background-position-x: 71.4%; }
                 }
+                @keyframes breathe {
+                  0%, 100% { transform: scale(1); }
+                  50% { transform: scale(0.85); }
+                }
+                .animate-breathe {
+                  animation: breathe 2s ease-in-out infinite;
+                }
               `}</style>
                 <div className={`cat-sprite drop-shadow-2xl ${isPetted ? 'cat-petted' : isThinking ? 'cat-thinking' : 'cat-idle'}`} />
               </div>
@@ -477,8 +453,8 @@ export default function CyberCat() {
               )}
             </AnimatePresence>
           )}
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
     </motion.div>
   );
 }
