@@ -3,7 +3,7 @@
 export const siteConfig = {
   // 1. 网站标题与信息
   title: "AI Agent 学习笔记",
-  faviconUrl: "https://bu.dusays.com/2026/03/24/69c1e38ac1846.jpg",
+  faviconUrl: "/picture/touxiang/toux1.jpg",
   authorName: "Agent Learner",
   bio: "从零开始学习 AI Agent 开发，记录 LangChain、RAG、Prompt Engineering 等技术栈的实践笔记。关注智能体架构设计与落地实践。",
 
@@ -12,7 +12,7 @@ export const siteConfig = {
   navAfter: "学习笔记",
 
   // 2. 头像设置
-  avatarUrl: "https://bu.dusays.com/2026/03/24/69c1e38ac1846.jpg",
+  avatarUrl: "/picture/touxiang/toux1.jpg",
 
   // 3. 网站背景设置
   useGradient: false,
@@ -20,7 +20,7 @@ export const siteConfig = {
   bgImages: [],
 
   // 4. 文章默认封面图
-  defaultPostCover: "",
+  defaultPostCover: "/picture/fengmian/111.jpg",
 
   // 5. 首页照片墙预览图
   photoWallImage: "",

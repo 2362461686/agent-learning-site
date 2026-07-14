@@ -2,7 +2,7 @@
 title: "AI Agent 概述：什么是智能体？"
 date: "2026-07-10 12:00:00"
 description: "从 LLM 到 AI Agent 的演进之路，搞懂智能体的核心概念"
-cover: ""
+cover: "/picture/fengmian/111.jpg"
 tags: ["AI Agent", "入门", "教程"]
 
 videos:
@@ -11,6 +11,9 @@ videos:
     platform: "youtube"
   - title: "什么是 AI Agent？通俗讲解"
     url: "https://www.bilibili.com/video/BV1Z7ZwYHENT/"
+    platform: "bilibili"
+  - title: "LangGraph 实战：构建你的第一个 Agent"
+    url: "https://www.bilibili.com/video/BV1uH4y1c7bM/"
     platform: "bilibili"
 
 links:
@@ -37,7 +40,7 @@ links:
 
 打个比方：**ChatGPT 就像高考前的学霸 —— 知识停留在训练截止日，考完试之后世界发生了什么，它一概不知。**你问它"今天北京天气怎么样"，它要么拒绝回答，要么编一个看起来很像那么回事的数字（这就是幻觉 —— 学霸的通病，不会也要硬答）。
 
-AI Agent（智能体）正是为了解决这些问题而生的。
+AI Agent 的出现，让 LLM 从"嘴炮王者"变成了"实干家"——只能说不能干的日子结束了。用一个贴切的比喻来形容：
 
 ## 什么是 AI Agent？
 
@@ -52,7 +55,7 @@ AI Agent（智能体）正是为了解决这些问题而生的。
 3. **行动**：调用工具执行具体操作
 4. **观察**：获取执行结果，判断是否需要继续
 
-这四步循环，在工程上有一个很酷的名字叫 **"ReAct 循环"**（Reasoning + Acting），但本质上就是：**看 → 想 → 干 → 再看一眼**，像极了你在写 bug 时反复 `console.log` 的心路历程。
+这四步循环，在工程上有一个很酷的名字叫 **"ReAct 循环"**（Reasoning + Acting），但本质上就是：**看 → 想 → 干 → 再看一眼**，像极了你在写 bug 时反复 `console.log` 的心路历程——当然，Agent 不会跟你一样在第二步"想"的环节偷偷刷手机摸鱼。
 
 用一段伪代码来直观感受一下 Agent 的"脑回路"：
 

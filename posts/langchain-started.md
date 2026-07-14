@@ -2,12 +2,18 @@
 title: "LangChain 入门：构建第一个 Chain"
 date: "2026-07-11 10:00:00"
 description: "掌握 LangChain 核心三件套：Chain、Tool、Memory"
-cover: ""
+cover: "/picture/fengmian/222.jpg"
 tags: ["LangChain", "框架", "教程"]
 
 videos:
   - title: "LangChain 入门教程：构建你的第一个 AI 应用"
     url: "https://www.bilibili.com/video/BV1g7nczpEaJ/"
+    platform: "bilibili"
+  - title: "LangChain Crash Course for Beginners"
+    url: "https://www.youtube.com/watch?v=lG7Uxts9SXs"
+    platform: "youtube"
+  - title: "LangGraph & LangChain Explained in 15 Minutes"
+    url: "https://www.bilibili.com/video/BV1br421L7ex/"
     platform: "bilibili"
 
 links:
@@ -189,6 +195,8 @@ LangChain 的三大核心：
 - **Chain**：串联处理步骤，像流水线一样让数据自动流转
 - **Tool**：扩展 Agent 能力边界，给它装上"手脚"
 - **Memory**：让对话有"记忆"，告别金鱼式对话
+
+> 记住一个朴实无华的真理：LangChain 不会让你少写代码，它只是把你本来要手写 100 行的逻辑压缩成了 20 行配置。剩下的 80 行变成了 debug 和看源码的时间——这是所有框架的宿命，不是 LangChain 的锅。但 LCEL 的管道语法至少让你的代码看起来像在做工程而不是在写脚本，面试的时候能多聊五分钟。
 
 下一篇我们将深入 RAG（检索增强生成），看看如何让 Agent "学会查资料"。
 

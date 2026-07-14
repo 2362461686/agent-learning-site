@@ -2,12 +2,18 @@
 title: "Agent 架构设计：ReAct、Plan-Execute 与 Multi-Agent"
 date: "2026-07-12 16:00:00"
 description: "深入理解 Agent 的三种核心架构模式，选择最适合你场景的方案"
-cover: ""
+cover: "/picture/fengmian/555.jpg"
 tags: ["Agent 架构", "ReAct", "Multi-Agent", "进阶", "教程"]
 
 videos:
   - title: "Multi-Agent 系统设计：从理论到实战"
     url: "https://www.bilibili.com/video/BV1is1SBEEfv/"
+    platform: "bilibili"
+  - title: "ReAct & Plan-Execute: LLM Agent Architectures Explained"
+    url: "https://www.youtube.com/watch?v=e8X6DqLre0Y"
+    platform: "youtube"
+  - title: "CrewAI 多智能体协作实战教程"
+    url: "https://www.bilibili.com/video/BV1Vt42177cF/"
     platform: "bilibili"
 
 links:
@@ -89,6 +95,8 @@ executor = AgentExecutor(
 对于复杂任务，**先规划再执行**可能更高效。
 
 如果把 ReAct 比作"敏捷开发，走一步看一步"，那 Plan-Execute 就是"瀑布模型，需求文档先写好"。听起来老派？但在任务链路清晰的时候，它真的省 token——不用每一步都重新思考"我接下来要干嘛"。
+
+（Plan-Execute 唯一的风险：如果你的 Planner 画出了一份不靠谱的计划，后面所有 Executor 都是白费功夫——跟 PM 写了个不靠谱的 PRD 一样，后端写得再认真也是徒劳。所以写 System Prompt 的时候请务必把 Planner 调教好。）
 
 ### 工作流程
 

@@ -14,11 +14,16 @@ tags: ["关于"]
 
 我在这里分享 AI Agent 相关的学习笔记和实战教程，覆盖以下主题：
 
+- **AI Agent 入门**：什么是智能体？核心概念与工作流程
 - **LangChain 框架**：Chain、Tool、Memory 等核心概念
-- **RAG 检索增强生成**：从原理到实现
+- **RAG 检索增强生成**：从原理到实现，让 AI 回答更准确
 - **Prompt Engineering**：驾驭 LLM 的核心技能
 - **Agent 架构设计**：ReAct、Plan-Execute、Multi-Agent
-- **工具调用**：Function Calling 深度解析
+- **Function Calling**：LLM 调 API 的底层原理与最佳实践
+- **向量数据库**：Embedding、选型决策、索引优化
+- **Multi-Agent 协作**：CrewAI / LangGraph Supervisor 实战
+- **Agent 部署与生产化**：LangServe / FastAPI / Docker / Vercel
+- **AI Agent 安全**：Prompt 注入防御、权限控制、输出审查
 
 ### 为什么建这个站？
 
