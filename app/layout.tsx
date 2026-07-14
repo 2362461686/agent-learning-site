@@ -10,8 +10,7 @@ import { LearningProvider } from "../components/LearningProvider";
 import { siteConfig } from "../siteConfig";
 import BackgroundSlider from "../components/BackgroundSlider";
 import MobileBackButton from '../components/MobileBackButton';
-import AgentAssistant from '../components/AgentAssistant'; // ✅ Phase1: AI 学习助手
-import CyberCat from '../components/CyberCat'; // ✅ Step4: AI 猫猫助理
+import CyberCat from '../components/CyberCat';             // Step4: AI cat assistant
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -68,9 +67,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <div className="hidden md:block">
                 <FloatingPlayer />
               </div>
-
-              {/* ✅ Phase1: AI 学习助手浮动聊天 */}
-              <AgentAssistant />
 
               {/* ✅ Step4: AI 猫猫助理（煤球）*/}
               <CyberCat />

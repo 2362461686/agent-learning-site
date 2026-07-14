@@ -4,13 +4,13 @@
  * ✅ Step4: AI 猫猫助理 — CyberCat
  *
  * 三层架构实现角色形象：
- *   视觉层：CSS 精灵图（siamese-cat.png），3列 x 2行，background-position 切换帧
+ *   视觉层：CSS 精灵图（yuexinmiao.webp），8列 x 9行，background-position 切换帧
  *   人格层：system prompt 配置在 siteConfig.catAssistantConfig
  *   交互层：拖拽、抚摸、喂小鱼干、聊天输入、随机挂机语录
  *
  * 功能：
  *   - 可拖拽的浮动猫咪（fixed bottom-20 right-20）
- *   - 3种动画：idle（慢速3帧）、thinking（快速）、petted（另起一行）
+ *   - 3种动画：idle（慢速6帧）、thinking（快速6帧）、petted（4帧waving）
  *   - 聊天气泡（点击抚摸 / AI 回复时显示）
  *   - 喂小鱼干 → 调 DeepSeek API 获取猫言猫语
  *   - 聊天输入框 → 和猫咪对话
@@ -28,6 +28,7 @@ export default function CyberCat() {
   const [isThinking, setIsThinking] = useState(false);
 
   const chatTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const sessionIdRef = useRef<string>(`sess_${Math.random().toString(36).slice(2)}`);
 
   // --- 说话功能 ---
   const speak = (text: string, duration = 6000) => {
@@ -57,7 +58,7 @@ export default function CyberCat() {
       const res = await fetch('/api/chat/cat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: "我刚刚喂了你一条美味的小鱼干！你有什么表示？" }),
+        body: JSON.stringify({ message: "我刚刚喂了你一条美味的小鱼干！你有什么表示？", sessionId: sessionIdRef.current }),
       });
 
       if (!res.ok) throw new Error('API Error');
@@ -85,7 +86,7 @@ export default function CyberCat() {
       const res = await fetch('/api/chat/cat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify({ message: userMessage, sessionId: sessionIdRef.current }),
       });
 
       if (!res.ok) throw new Error('API Error');
@@ -101,13 +102,16 @@ export default function CyberCat() {
   // --- 随机挂机语录（每 20 秒 20% 概率触发） ---
   useEffect(() => {
     const randomBarks = [
-      "喵呜~ 今天天气真不错喵~",
-      "好困哦，想睡觉喵...",
-      "铲屎官，快去敲代码！",
-      "我的小鱼干藏哪里去了？",
+      "喵呜~ 今天发工资了吗喵~",
+      "好困哦，想下班睡觉喵...",
+      "铲屎官，快去赚月薪买小鱼干！",
+      "我的小鱼干藏哪里去了喵？",
       "怎么没人理本喵...",
+      "这个月绩效能拿多少喵？",
       "Agent 架构好难喵...",
       "LangChain 是什么好吃的喵？",
+      "打工喵的一天又开始啦喵~",
+      "月薪喵也想躺平喵呜...",
     ];
     const interval = setInterval(() => {
       if (!speech && !showInput && !isThinking && Math.random() > 0.8) {
@@ -185,31 +189,43 @@ export default function CyberCat() {
             .cat-sprite {
               width: 100%;
               height: 100%;
-              background-image: url('/siamese-cat.png');
-              background-size: 300% 300%;
+              background-image: url('/yuexinmiao.webp');
+              background-size: 800% 900%;
               background-repeat: no-repeat;
-              image-rendering: pixelated;
             }
             .cat-idle {
-              animation: idle-frames 1.2s infinite;
+              animation: cat-idle 1.2s steps(1) infinite;
               background-position-y: 0%;
             }
             .cat-petted {
-              animation: pet-frames 0.8s infinite;
-              background-position-y: 50%;
+              animation: cat-petted 0.8s steps(1) infinite;
+              background-position-y: 37.5%;
             }
             .cat-thinking {
-              animation: idle-frames 0.6s infinite;
-              background-position-y: 0%;
+              animation: cat-thinking 0.6s steps(1) infinite;
+              background-position-y: 75%;
             }
-            @keyframes idle-frames {
-              0%, 33.32% { background-position-x: 0%; }
-              33.33%, 66.65% { background-position-x: 50%; }
-              66.66%, 100% { background-position-x: 100%; }
+            @keyframes cat-idle {
+              0%, 16.67% { background-position-x: 0%; }
+              16.67%, 33.33% { background-position-x: 14.3%; }
+              33.33%, 50% { background-position-x: 28.6%; }
+              50%, 66.67% { background-position-x: 42.9%; }
+              66.67%, 83.33% { background-position-x: 57.1%; }
+              83.33%, 100% { background-position-x: 71.4%; }
             }
-            @keyframes pet-frames {
-              0%, 49.99% { background-position-x: 0%; }
-              50%, 100% { background-position-x: 50%; }
+            @keyframes cat-petted {
+              0%, 25% { background-position-x: 0%; }
+              25%, 50% { background-position-x: 14.3%; }
+              50%, 75% { background-position-x: 28.6%; }
+              75%, 100% { background-position-x: 42.9%; }
+            }
+            @keyframes cat-thinking {
+              0%, 16.67% { background-position-x: 0%; }
+              16.67%, 33.33% { background-position-x: 14.3%; }
+              33.33%, 50% { background-position-x: 28.6%; }
+              50%, 66.67% { background-position-x: 42.9%; }
+              66.67%, 83.33% { background-position-x: 57.1%; }
+              83.33%, 100% { background-position-x: 71.4%; }
             }
           `}</style>
           <div className={`cat-sprite drop-shadow-2xl ${isPetted ? 'cat-petted' : isThinking ? 'cat-thinking' : 'cat-idle'}`} />
@@ -230,7 +246,7 @@ export default function CyberCat() {
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="跟煤球说点啥喵..."
+              placeholder="跟月薪喵说点啥喵..."
               className="bg-transparent border-none outline-none text-sm px-3 py-1 w-full dark:text-white placeholder-gray-400"
               disabled={isThinking}
               autoFocus
